@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Professional Glassmorphic Calculator</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: #0b0f19;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Particle Canvas Background */
+    #particle-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    /* Calculator Container */
+    .calculator {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      max-width: 360px;
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 24px;
+      padding: 24px;
+      box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
+    }
+
+    /* Display Screen */
+    .display {
+      background: rgba(2, 6, 23, 0.6);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+      text-align: right;
+      min-height: 100px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      word-wrap: break-word;
+      word-break: break-all;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .previous-operand {
+      color: #94a3b8;
+      font-size: 0.95rem;
+      min-height: 1.2rem;
+    }
+
+    .current-operand {
+      color: #f8fafc;
+      font-size: 2.25rem;
+      font-weight: 600;
+    }
+
+    /* Button Layout */
+    .buttons {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .btn {
+      height: 60px;
+      border: none;
+      border-radius: 14px;
+      font-size: 1.25rem;
+      font-weight: 500;
+      color: #f8fafc;
+      background: rgba(255, 255, 255, 0.05);
+      cursor: pointer;
+      transition: all 0.15s ease-in-out;
+      user-select: none;
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+      transform: translateY(-2px);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    /* Operator & Function Color Variants */
+    .btn-operator {
+      background: rgba(99, 102, 241, 0.25);
+      color: #a5b4fc;
+    }
+
+    .btn-operator:hover {
+      background: rgba(99, 102, 241, 0.4);
+    }
+
+    .btn-function {
+      background: rgba(239, 68, 68, 0.18);
+      color: #fca5a5;
+    }
+
+    .btn-function:hover {
+      background: rgba(239, 68, 68, 0.3);
+    }
+
+    .btn-equals {
+      background: #6366f1;
+      color: #ffffff;
+      font-weight: 600;
+    }
+
+    .btn-equals:hover {
+      background: #4f46e5;
+    }
+
+    .span-two {
+      grid-column: span 2;
+    }
+  </style>
+</head>
+<body>
+
+  <canvas id="particle-canvas"></canvas>
+
+  <div class="calculator">
+    <div class="display">
+      <div class="previous-operand" id="previous-operand"></div>
+      <div class="current-operand" id="current-operand">0</div>
+    </div>
+
+    <div class="buttons">
+      <button class="btn btn-function" id="clear">AC</button>
+      <button class="btn btn-function" id="delete">DEL</button>
+      <button class="btn btn-function" data-action="percent">%</button>
+      <button class="btn btn-operator" data-operator="÷">÷</button>
+
+      <button class="btn" data-number="7">7</button>
+      <button class="btn" data-number="8">8</button>
+      <button class="btn" data-number="9">9</button>
+      <button class="btn btn-operator" data-operator="×">×</button>
+
+      <button class="btn" data-number="4">4</button>
+      <button class="btn" data-number="5">5</button>
+      <button class="btn" data-number="6">6</button>
+      <button class="btn btn-operator" data-operator="-">−</button>
+
+      <button class="btn" data-number="1">1</button>
+      <button class="btn" data-number="2">2</button>
+      <button class="btn" data-number="3">3</button>
+      <button class="btn btn-operator" data-operator="+">+</button>
+
+      <button class="btn" data-number="0">0</button>
+      <button class="btn" data-number=".">.</button>
+      <button class="btn btn-equals span-two" id="equals">=</button>
+    </div>
+  </div>
+
+  <script>
+    /* ===================================================
+       1. CALCULATOR LOGIC ENGINE
+       =================================================== */
+    class Calculator {
+      constructor(previousOperandElement, currentOperandElement) {
+        this.previousOperandElement = previousOperandElement;
+        this.currentOperandElement = currentOperandElement;
+        this.clear();
+      }
+
+      clear() {
+        this.currentOperand = '0';
+        this.previousOperand = '';
+        this.operation = undefined;
+        this.shouldResetScreen = false;
+      }
+
+      delete() {
+        if (this.shouldResetScreen) return;
+        if (this.currentOperand === '0') return;
+        if (this.currentOperand.length === 1) {
+          this.currentOperand = '0';
+        } else {
+          this.currentOperand = this.currentOperand.toString().slice(0, -1);
+        }
+      }
+
+      appendNumber(number) {
+        if (this.currentOperand === '0' || this.shouldResetScreen) {
+          this.currentOperand = number === '.' ? '0.' : number.toString();
+          this.shouldResetScreen = false;
+          return;
+        }
+        if (number === '.' && this.currentOperand.includes('.')) return;
+        this.currentOperand += number.toString();
+      }
+
+      chooseOperation(operation) {
+        if (this.currentOperand === '' && this.previousOperand === '') return;
+        if (this.previousOperand !== '' && !this.shouldResetScreen) {
+          this.compute();
+        }
+        this.operation = operation;
+        this.previousOperand = `${this.currentOperand} ${this.operation}`;
+        this.shouldResetScreen = true;
+      }
+
+      compute() {
+        let computation;
+        const prev = parseFloat(this.previousOperand);
+        const current = parseFloat(this.currentOperand);
+
+        if (isNaN(prev) || isNaN(current)) return;
+
+        switch (this.operation) {
+          case '+':
+            computation = prev + current;
+            break;
+          case '-':
+          case '−':
+            computation = prev - current;
+            break;
+          case '×':
+          case '*':
+            computation = prev * current;
+            break;
+          case '÷':
+          case '/':
+            if (current === 0) {
+              alert("Cannot divide by zero!");
+              this.clear();
+              return;
+            }
+            computation = prev / current;
+            break;
+          default:
+            return;
+        }
+
+        this.currentOperand = Math.round(computation * 1e10) / 1e10;
+        this.operation = undefined;
+        this.previousOperand = '';
+        this.shouldResetScreen = true;
+      }
+
+      percentage() {
+        const current = parseFloat(this.currentOperand);
+        if (isNaN(current)) return;
+        this.currentOperand = (current / 100).toString();
+      }
+
+      updateDisplay() {
+        this.currentOperandElement.innerText = this.currentOperand;
+        this.previousOperandElement.innerText = this.previousOperand;
+      }
+    }
+
+    // DOM Binding
+    const previousOperandElement = document.getElementById('previous-operand');
+    const currentOperandElement = document.getElementById('current-operand');
+    const calculator = new Calculator(previousOperandElement, currentOperandElement);
+
+    // Event Handling
+    document.querySelectorAll('[data-number]').forEach(button => {
+      button.addEventListener('click', () => {
+        calculator.appendNumber(button.dataset.number);
+        calculator.updateDisplay();
+      });
+    });
+
+    document.querySelectorAll('[data-operator]').forEach(button => {
+      button.addEventListener('click', () => {
+        calculator.chooseOperation(button.dataset.operator);
+        calculator.updateDisplay();
+      });
+    });
+
+    document.getElementById('equals').addEventListener('click', () => {
+      calculator.compute();
+      calculator.updateDisplay();
+    });
+
+    document.getElementById('clear').addEventListener('click', () => {
+      calculator.clear();
+      calculator.updateDisplay();
+    });
+
+    document.getElementById('delete').addEventListener('click', () => {
+      calculator.delete();
+      calculator.updateDisplay();
+    });
+
+    document.querySelector('[data-action="percent"]').addEventListener('click', () => {
+      calculator.percentage();
+      calculator.updateDisplay();
+    });
+
+    // Keyboard Bindings
+    document.addEventListener('keydown', (e) => {
+      let key = e.key;
+      if ((key >= '0' && key <= '9') || key === '.') calculator.appendNumber(key);
+      else if (key === '+' || key === '-') calculator.chooseOperation(key);
+      else if (key === '*') calculator.chooseOperation('×');
+      else if (key === '/') { e.preventDefault(); calculator.chooseOperation('÷'); }
+      else if (key === 'Enter' || key === '=') { e.preventDefault(); calculator.compute(); }
+      else if (key === 'Backspace') calculator.delete();
+      else if (key === 'Escape') calculator.clear();
+      else if (key === '%') calculator.percentage();
+
+      calculator.updateDisplay();
+    });
+
+    /* ===================================================
+       2. MOUSE-FOLLOWING PARTICLE CANVAS SYSTEM
+       =================================================== */
+    const canvas = document.getElementById('particle-canvas');
+    const ctx = canvas.getContext('2d');
+
+    let particles = [];
+    const mouse = { x: null, y: null };
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    window.addEventListener('mousemove', (e) => {
+      mouse.x = e.x;
+      mouse.y = e.y;
+      // Spawn particles on cursor movement
+      for (let i = 0; i < 3; i++) {
+        particles.push(new Particle(mouse.x, mouse.y));
+      }
+    });
+
+    class Particle {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.size = Math.random() * 4 + 1;
+        this.speedX = (Math.random() - 0.5) * 2;
+        this.speedY = (Math.random() - 0.5) * 2;
+        this.color = `hsla(${Math.random() * 60 + 220}, 80%, 70%, `; // Indigo/Violet spectrum
+        this.alpha = 1;
+        this.decay = Math.random() * 0.02 + 0.01;
+      }
+
+      update() {
+        this.x += this.speedX;
+        this.y += this.speedY;
+        this.alpha -= this.decay;
+      }
+
+      draw() {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fillStyle = this.color + this.alpha + ')';
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = 'rgba(99, 102, 241, 0.8)';
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function handleParticles() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < particles.length; i++) {
+        particles[i].update();
+        particles[i].draw();
+        
+        if (particles[i].alpha <= 0) {
+          particles.splice(i, 1);
+          i--;
+        }
+      }
+      requestAnimationFrame(handleParticles);
+    }
+    handleParticles();
+  </script>
+</body>
+</html>
